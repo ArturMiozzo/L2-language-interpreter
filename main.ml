@@ -4,8 +4,10 @@ type tipo =
     TyInt 
   | TyBool
   | TyFn of tipo * tipo
-  | TyPair of tipo * tipo
-              
+  | TyPair of tipo * tipo 
+  | TyRef of tipo
+  | TyUnit
+
 type ident = string
   
 type bop = Sum | Sub | Mult  | Gt | Lt | Geq | Leq | Eq
@@ -31,6 +33,12 @@ type expr  =
   | App of expr * expr
   | Let of ident * tipo * expr * expr
   | LetRec of ident * tipo * expr  * expr
+  | Asg of expr * expr
+  | Dref of expr
+  | New of expr
+  | Seq of expr * expr
+  | Whl of expr * expr
+  | Skip
               
               
 type amb = (ident * tipo) list 
