@@ -181,6 +181,8 @@ let rec ttos (t:tipo) : string =
   | TyBool -> "bool"
   | TyFn(t1,t2)   ->  "("  ^ (ttos t1) ^ " --> " ^ (ttos t2) ^ ")"
   | TyPair(t1,t2) ->  "("  ^ (ttos t1) ^ " * "   ^ (ttos t2) ^ ")" 
+  | TyRef(t1)   ->  "("  ^ (ttos t1) ^ ")"
+  | TyUnit ->  "unit" 
    
                                                                                                     
    (* ========================================= *)
@@ -214,7 +216,15 @@ let rec subs (v:expr) (x:ident) (e:expr) : expr =
         Let(y,t, sb e1,if x = y then e2 else sb e2)
     | LetRec(f,tf,ef,e2) -> 
         if x = f then e 
-        else LetRec(f,tf, sb ef, sb e2)
+        else LetRec(f,tf, sb ef, sb e2) 
+            
+    | Asg(e1,e2) -> Asg(sb e1, sb e2)
+    | Dref(e1) -> Dref(sb e1)
+    | New(e1) -> New(sb e1)
+    | Seq(e1,e2) -> Seq(sb e1,sb e2)
+    | Whl(e1,e2) -> Whl(sb e1,sb e2)
+    | Skip -> e
+      
   in sb e
     
     
