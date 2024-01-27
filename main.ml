@@ -138,7 +138,39 @@ let rec typeinfer (gamma: amb) (e:expr) : tipo  =
    (* se não colocarmos essa ultimo pattern teremos warning:
       pattern matching non exhaustive *)  
 
-  | LetRec _ -> raise BugParser 
+  | LetRec _ -> raise BugParser
+  
+  | Asg(e1,e2) ->
+      (match typeinfer gamma e1 with
+         TyRef(t1) -> 
+           let t2 = typeinfer gamma e2 in
+           if t1 = t2 then TyUnit
+           else raise (TypeError "tipos precisam ser iguais para atribuição")
+       | _ -> raise (TypeError "tipo da variavel precisa ser ref para ser atribuida"))
+  
+  | Dref(e1) ->
+      (match typeinfer gamma e1 with
+         TyRef(t1) -> t1
+       | _ -> raise (TypeError "tipo da variavel precisa ser ref para ser acessada"))
+      
+  | New(e1) ->
+      let t1 = typeinfer gamma e1
+      in TyRef(t1) 
+  
+  | Skip -> TyUnit
+    
+  | Whl(e1,e2) -> 
+      ( match typeinfer gamma e1 with 
+          TyBool -> 
+            ( match typeinfer gamma e2 with 
+                TyUnit -> TyUnit
+              | _ -> raise (TypeError "segundo argumento precisa ser uma expressao do tipo unit"))
+        | _ -> raise (TypeError "condição de Whl não é do tipo bool")) 
+      
+  | Seq(e1,e2) ->
+      (match typeinfer gamma e1 with
+         TyUnit -> typeinfer gamma e2
+       | _ -> raise (TypeError "primeiro argumento precisa ser uma expressao do tipo unit"))
   
 
 (* função auxiliar que convert tipo para string *)
