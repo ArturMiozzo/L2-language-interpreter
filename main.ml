@@ -43,6 +43,10 @@ type expr  =
               
 type amb = (ident * tipo) list 
     
+type memory = (expr * expr) list
+    
+type exp_mem = Em of expr * memory
+    
 let empty_gamma : amb = []
     
 let rec lookup (gamma: amb) (x:ident) : tipo option = 
@@ -51,7 +55,15 @@ let rec lookup (gamma: amb) (x:ident) : tipo option =
   | (y,t) :: tl -> if (y = x) then Some t else lookup tl x
   
 let rec update (gamma: amb) (x:ident) (t:tipo) : amb = 
-  (x,t) :: gamma
+  (x,t) :: gamma 
+  
+let rec lookupMem (sigma: memory) (x:expr) : expr option = 
+  match sigma with
+    []          -> None
+  | (y,e) :: tl -> if (y = x) then Some e else lookupMem tl x
+  
+let rec updateMem (sigma: memory) (x:expr) (e:expr) : memory = 
+  (x,e) :: sigma
   
 
 (* TypeError é ativada se programador L1 escreveu expressão mal tipada *) 
@@ -182,7 +194,7 @@ let rec ttos (t:tipo) : string =
   | TyFn(t1,t2)   ->  "("  ^ (ttos t1) ^ " --> " ^ (ttos t2) ^ ")"
   | TyPair(t1,t2) ->  "("  ^ (ttos t1) ^ " * "   ^ (ttos t2) ^ ")" 
   | TyRef(t1)   ->  "("  ^ (ttos t1) ^ ")"
-  | TyUnit ->  "unit" 
+  | TyUnit -> "unit" 
    
                                                                                                     
    (* ========================================= *)
@@ -243,63 +255,71 @@ let compute(oper: bop) (v1: expr) (v2:expr) = match (oper,v1,v2) with
         
     
 
-let rec step (e:expr) : expr = match e with 
+let rec step (e:expr) (sigma:memory): exp_mem = match e with 
   | Binop(oper, e1,e2) when (isvalue e1) && (isvalue e2) -> 
-      compute oper e1 e2
+      Em(compute oper e1 e2, sigma)
   | Binop(oper,v1,e2) when (isvalue v1) ->
-      let e2' = step e2 in Binop(oper,v1,e2')
+      (match step e2 sigma with Em(e2', sigma') -> Em(Binop(oper,v1,e2'), sigma'))
   | Binop(oper,e1,e2)  ->
-      let e1' = step e1 in Binop(oper,e1',e2)
+      (match step e1 sigma with Em(e1', sigma') -> Em(Binop(oper,e1',e2), sigma'))
         
   | Pair(v1,e2) when (isvalue v1) ->
-      let e2' = step e2 in Pair(v1,e2')
+      (match step e2 sigma with Em(e2', sigma') -> Em(Pair(v1,e2'), sigma'))
   | Pair(e1,e2)  ->
-      let e1' = step e1 in Pair(e1',e2)
+      (match step e1 sigma with Em(e1', sigma') -> Em(Pair(e1',e2), sigma'))
         
   | Fst(Pair(v1,v2)) when (isvalue v1) && (isvalue v2) -> 
-      v1
+      Em(v1, sigma)
   | Fst e -> 
-      let e'= step e in Fst e'
+      (match step e sigma with Em(e', sigma') -> Em(Fst e', sigma'))
         
   | Snd(Pair(v1,v2)) when (isvalue v1) && (isvalue v2) -> 
-      v2
+      Em(v2, sigma)
   | Snd e -> 
-      let e'= step e in Snd e'
+      (match step e sigma with Em(e', sigma') -> Em(Snd e', sigma'))
         
   | If(True,e2,_) ->
-      e2
+      Em(e2, sigma)
   | If(False,_,e3) ->
-      e3
+      Em(e3, sigma)
   | If(e1,e2,e3) -> 
-      let e1'= step e1 in  If(e1',e2,e3)
+      (match step e1 sigma with Em(e1', sigma') -> Em(If(e1',e2,e3), sigma'))
         
   | App(Fn(x,t,ebdy), v) when isvalue v ->
-      subs v x ebdy
+      Em(subs v x ebdy, sigma)
   | App(v1, e2) when isvalue v1 ->
-      let e2'= step e2 in App(v1, e2')
-  | App(e1, e2)  ->
-      let e1'= step e1 in App(e1',e2)
+      (match step e2 sigma with Em(e2', sigma') -> Em(App(v1, e2'), sigma'))
+  | App(e1, e2) ->
+      (match step e1 sigma with Em(e1', sigma') -> Em(App(e1', e2), sigma'))
         
   | Let(x,t,v1,e2) -> 
-      subs v1 x e2 
+      Em(subs v1 x e2, sigma)
   | Let(x,t,e1,e2) -> 
-      let e1'= step e1 in Let(x,t,e1',e2)
+      (match step e1 sigma with Em(e1', sigma') -> Em(Let(x,t,e1',e2), sigma'))
         
   | LetRec(f, (TyFn(t1,t2) as tf), (Fn(x,tx,e1) as ef),e2) -> 
       let alpha = Fn(x,tx, LetRec(f,tf,ef,e1))
-      in subs alpha f e2
+      in Em(subs alpha f e2, sigma)
   | LetRec _ -> raise BugParser
                   
+  | Asg(l,v) when (match lookupMem sigma l with
+        Some e -> true
+      | None   -> false) ->
+      let sigma_ = updateMem sigma l v in Em(Skip, sigma_)
+  | Asg(v,e) when isvalue v ->
+      (match step e sigma with Em(e', sigma') -> Em(Asg(v, e'), sigma'))
+  | Asg(e1,e2) ->
+      (match step e1 sigma with Em(e1', sigma') -> Em(Asg(e1', e2), sigma'))
+        
   |  _ -> raise NoRuleApplies
             
 exception BugTypeInfer 
   
-let rec evalst (e:expr) : expr =
+let rec evalst (e:expr) (sigma:memory): exp_mem =
   try
-    let e'= step e
-    in evalst e'
+    match step e sigma with Em(e', sigma') -> evalst e' sigma'
   with 
-    NoRuleApplies -> if isvalue e then e else raise BugTypeInfer
+    NoRuleApplies -> if isvalue e then Em(e, sigma) else raise BugTypeInfer
           
 let rec vtos (v:expr) : string = match v with
     Num n1 -> string_of_int n1
@@ -311,11 +331,10 @@ let rec vtos (v:expr) : string = match v with
   | _ ->  raise (Invalid_argument "not a vlue")
             
             
-let int_st (e:expr)  = 
+let int_st (e:expr) (sigma:memory) = 
   try
     let t = typeinfer empty_gamma e in
-    let v = evalst e  
-    in  print_string ((vtos v) ^ " : " ^ (ttos t))
+    match evalst e sigma with Em(v, sigma) -> print_string ((vtos v) ^ " : " ^ (ttos t))
   with 
     TypeError msg -> print_string ("erro de tipo: " ^ msg)
       
