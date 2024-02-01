@@ -44,9 +44,6 @@ type expr =
   | Skip
   
 type tenv = (ident * tipo) list
-type memory = (expr * expr) list
-
-type exp_mem = Em of expr * memory
 
 type valor =
     VNum of int
@@ -56,9 +53,10 @@ type valor =
   | VClos  of ident * expr * renv
   | VRclos of ident * ident * expr * renv 
 and 
-  renv = (ident * valor) list
+  renv = (ident * valor) list 
     
-    
+type v_env = V_Env of valor * renv    
+
 (* funções polimórficas para ambientes *)
 
 let rec lookup a k =
@@ -211,63 +209,65 @@ let compute (oper: op) (v1: valor) (v2: valor) : valor =
   | _ -> raise BugTypeInfer
 
 
-let rec eval (renv:renv) (e:expr) : valor =
+let rec eval (renv:renv) (e:expr) : v_env =
   match e with
-    Num n -> VNum n
-  | True -> VTrue
-  | False -> VFalse
+    Num n -> V_Env(VNum n, renv)
+  | True -> V_Env(VTrue, renv)
+  | False -> V_Env(VFalse, renv)
 
   | Var x ->
       (match lookup renv x with
-         Some v -> v
+         Some v -> V_Env(v, renv)
        | None -> raise BugTypeInfer)
       
   | Binop(oper,e1,e2) ->
-      let v1 = eval renv e1 in
-      let v2 = eval renv e2 in
-      compute oper v1 v2
+      (match eval renv e1 with V_Env(v1, renv') ->
+         match eval renv' e2 with V_Env(v2, renv'') -> 
+           V_Env((compute oper v1 v2), renv''))
 
   | Pair(e1,e2) ->
-      let v1 = eval renv e1 in
-      let v2 = eval renv e2
-      in VPair(v1,v2)
+      (match eval renv e1 with V_Env(v1, renv') ->
+         match eval renv' e2 with V_Env(v2, renv'') -> 
+           V_Env(VPair(v1,v2), renv))
 
   | Fst e ->
       (match eval renv e with
-       | VPair(v1,_) -> v1
+       | V_Env(VPair(v1,_), renv') -> V_Env(v1, renv')
        | _ -> raise BugTypeInfer)
 
   | Snd e ->
       (match eval renv e with
-       | VPair(_,v2) -> v2
+       | V_Env(VPair(_,v2), renv') -> V_Env(v2, renv')
        | _ -> raise BugTypeInfer)
 
 
   | If(e1,e2,e3) ->
       (match eval renv e1 with
-         VTrue  -> eval renv e2
-       | VFalse -> eval renv e3
+         V_Env(VTrue, renv') -> eval renv' e2
+       | V_Env(VFalse, renv') -> eval renv' e3
        | _ -> raise BugTypeInfer )
 
-  | Fn (x,_,e1) ->  VClos(x,e1,renv)
+  | Fn (x,_,e1) ->  V_Env(VClos(x,e1,renv), renv)
 
   | App(e1,e2) ->
-      let v1 = eval renv e1 in
-      let v2 = eval renv e2 in
-      (match v1 with
-         VClos(x,ebdy,renv') ->
-           let renv'' = update renv' x v2
-           in eval renv'' ebdy
+      (match eval renv e1 with V_Env(v1, renv1) ->
+         (match v1 with 
+            VClos(x,ebdy,renv2) ->
+              (match eval renv2 e2 with V_Env(v2, renv3) ->
+                 let renv4 = update renv3 x v2
+                 in eval renv4 ebdy)
 
-       | VRclos(f,x,ebdy,renv') ->
-           let renv''  = update renv' x v2 in
-           let renv''' = update renv'' f v1
-           in eval renv''' ebdy
-       | _ -> raise BugTypeInfer)
+          | VRclos(f,x,ebdy,renv2) ->
+              (match eval renv2 e2 with V_Env(v2, renv3) ->
+                 let renv4  = update renv3 x v2 in
+                 let renv5 = update renv4 f v1
+                 in eval renv5 ebdy)
+          | _ -> raise BugTypeInfer))
 
   | Let(x,_,e1,e2) ->
-      let v1 = eval renv e1
-      in eval (update renv x v1) e2
+      (match eval renv e1 with V_Env(v1, renv') ->
+         let renv'' = update renv' x v1 in
+         eval renv'' e2)
 
   | LetRec(f,TyFn(t1,t2),Fn(x,tx,e1), e2) when t1 = tx ->
       let renv'= update renv f (VRclos(f,x,e1,renv))
@@ -285,8 +285,12 @@ let rec eval (renv:renv) (e:expr) : valor =
       let sigma_ = updateMem sigma l v in Em(Skip, sigma_)
   | Asg(v,e) when isvalue v ->
       (match step e sigma with Em(e', sigma') -> Em(Asg(v, e'), sigma'))
+
   | Asg(e1,e2) ->
-      (match step e1 sigma with Em(e1', sigma') -> Em(Asg(e1', e2), sigma'))
+      let l = eval renv e1 in
+      let v = eval renv e2 in
+      update renv 
+        (match step e1 sigma with Em(e1', sigma') -> Em(Asg(e1', e2), sigma'))
 *)
 
 (* função auxiliar que converte tipo para string *)
@@ -300,15 +304,17 @@ let rec ttos (t:tipo) : string =
 
 (* função auxiliar que converte valor para string *)
 
-let rec vtos (v: valor) : string =
-  match v with
-    VNum n -> string_of_int n
-  | VTrue -> "true"
-  | VFalse -> "false"
-  | VPair(v1, v2) ->
-      "(" ^ vtos v1 ^ "," ^ vtos v1 ^ ")"
-  | VClos _ ->  "fn"
-  | VRclos _ -> "fn"
+let rec vtos (mem: v_env) : string =
+  match mem with
+    V_Env(v, renv) -> 
+      (match v with
+         VNum n -> string_of_int n
+       | VTrue -> "true"
+       | VFalse -> "false"
+       | VPair(v1, v2) ->
+           "(" ^ (vtos (V_Env(v1, renv))) ^ "," ^ (vtos (V_Env(v2, renv))) ^ ")"
+       | VClos _ ->  "fn"
+       | VRclos _ -> "fn")
 
 (* principal do interpretador *)
 
