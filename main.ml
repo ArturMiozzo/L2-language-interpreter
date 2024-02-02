@@ -49,13 +49,16 @@ type valor =
     VNum of int
   | VTrue
   | VFalse
+  | Vl of int
   | VPair of valor * valor
   | VClos  of ident * expr * renv
   | VRclos of ident * ident * expr * renv 
 and 
-  renv = (ident * valor) list 
+  renv = (ident * valor) list
+
+type mem = (int * valor) list
     
-type v_env = V_Env of valor * renv    
+type v_mem = V_Mem of valor * mem
 
 (* funções polimórficas para ambientes *)
 
@@ -63,7 +66,7 @@ let rec lookup a k =
   match a with
     [] -> None
   | (y,i) :: tl -> if (y=k) then Some i else lookup tl k 
-       
+          
 let rec update a k i =
   (k,i) :: a   
 
@@ -209,89 +212,91 @@ let compute (oper: op) (v1: valor) (v2: valor) : valor =
   | _ -> raise BugTypeInfer
 
 
-let rec eval (renv:renv) (e:expr) : v_env =
+let rec eval (renv:renv) (e:expr) (mem:mem): v_mem =
   match e with
-    Num n -> V_Env(VNum n, renv)
-  | True -> V_Env(VTrue, renv)
-  | False -> V_Env(VFalse, renv)
+    Num n -> V_Mem(VNum n, mem)
+  | True -> V_Mem(VTrue, mem)
+  | False -> V_Mem(VFalse, mem)
 
   | Var x ->
       (match lookup renv x with
-         Some v -> V_Env(v, renv)
+         Some v -> V_Mem(v, mem)
        | None -> raise BugTypeInfer)
       
   | Binop(oper,e1,e2) ->
-      (match eval renv e1 with V_Env(v1, renv') ->
-         match eval renv' e2 with V_Env(v2, renv'') -> 
-           V_Env((compute oper v1 v2), renv''))
+      (match eval renv e1 mem with V_Mem(v1, mem') ->
+         match eval renv e2 mem' with V_Mem(v2, mem'') -> 
+           V_Mem((compute oper v1 v2), mem''))
 
   | Pair(e1,e2) ->
-      (match eval renv e1 with V_Env(v1, renv') ->
-         match eval renv' e2 with V_Env(v2, renv'') -> 
-           V_Env(VPair(v1,v2), renv))
+      (match eval renv e1 mem with V_Mem(v1, mem') ->
+         match eval renv e2 mem' with V_Mem(v2, mem'') -> 
+           V_Mem(VPair(v1,v2), mem''))
 
   | Fst e ->
-      (match eval renv e with
-       | V_Env(VPair(v1,_), renv') -> V_Env(v1, renv')
+      (match eval renv e mem with
+       | V_Mem(VPair(v1,_), mem') -> V_Mem(v1, mem')
        | _ -> raise BugTypeInfer)
 
   | Snd e ->
-      (match eval renv e with
-       | V_Env(VPair(_,v2), renv') -> V_Env(v2, renv')
+      (match eval renv e mem with
+       | V_Mem(VPair(_,v2), mem') -> V_Mem(v2, mem')
        | _ -> raise BugTypeInfer)
 
 
   | If(e1,e2,e3) ->
-      (match eval renv e1 with
-         V_Env(VTrue, renv') -> eval renv' e2
-       | V_Env(VFalse, renv') -> eval renv' e3
+      (match eval renv e1 mem with
+         V_Mem(VTrue, mem') -> eval renv e2 mem'
+       | V_Mem(VFalse, mem') -> eval renv e3 mem'
        | _ -> raise BugTypeInfer )
 
-  | Fn (x,_,e1) ->  V_Env(VClos(x,e1,renv), renv)
+  | Fn (x,_,e1) ->  V_Mem(VClos(x,e1,renv), mem)
 
   | App(e1,e2) ->
-      (match eval renv e1 with V_Env(v1, renv1) ->
+      (match eval renv e1 mem with V_Mem(v1, mem') ->
          (match v1 with 
-            VClos(x,ebdy,renv2) ->
-              (match eval renv2 e2 with V_Env(v2, renv3) ->
-                 let renv4 = update renv3 x v2
-                 in eval renv4 ebdy)
+            VClos(x,ebdy,renv') ->
+              (match eval renv' e2 mem' with V_Mem(v2, mem'') ->
+                 let renv'' = update renv' x v2
+                 in eval renv'' ebdy mem'')
 
-          | VRclos(f,x,ebdy,renv2) ->
-              (match eval renv2 e2 with V_Env(v2, renv3) ->
-                 let renv4  = update renv3 x v2 in
-                 let renv5 = update renv4 f v1
-                 in eval renv5 ebdy)
+          | VRclos(f,x,ebdy,renv') ->
+              (match eval renv' e2 mem' with V_Mem(v2, mem'') ->
+                 let renv''  = update renv' x v2 in
+                 let renv''' = update renv'' f v1
+                 in eval renv''' ebdy mem'')
           | _ -> raise BugTypeInfer))
 
   | Let(x,_,e1,e2) ->
-      (match eval renv e1 with V_Env(v1, renv') ->
-         let renv'' = update renv' x v1 in
-         eval renv'' e2)
+      (match eval renv e1 mem with V_Mem(v1, mem') ->
+         let renv' = update renv x v1 in
+         eval renv' e2 mem')
 
   | LetRec(f,TyFn(t1,t2),Fn(x,tx,e1), e2) when t1 = tx ->
       let renv'= update renv f (VRclos(f,x,e1,renv))
-      in eval renv' e2
+      in eval renv' e2 mem
         
         
   | LetRec _ -> raise BugParser
-  
-(* 
-   implementação small step do asg 
-  
-| Asg(l,v) when (match lookup renv l with
+(*                   
+  | Asg(l,v) when (match lookup renv l with
         Some e -> true
       | None   -> false) ->
       let sigma_ = updateMem sigma l v in Em(Skip, sigma_)
-  | Asg(v,e) when isvalue v ->
-      (match step e sigma with Em(e', sigma') -> Em(Asg(v, e'), sigma'))
 
+        implementação small step do asg 
+
+                                    | Asg(v,e) when isvalue v ->
+    (match step e sigma with Em(e', sigma') -> Em(Asg(v, e'), sigma'))
   | Asg(e1,e2) ->
       let l = eval renv e1 in
       let v = eval renv e2 in
-      update renv 
-        (match step e1 sigma with Em(e1', sigma') -> Em(Asg(e1', e2), sigma'))
-*)
+      (match l with
+         Vl -> 
+           update renv 
+             (match step e1 sigma with Em(e1', sigma') -> Em(Asg(e1', e2), sigma'))
+    *)
+
 
 (* função auxiliar que converte tipo para string *)
 
@@ -304,25 +309,34 @@ let rec ttos (t:tipo) : string =
 
 (* função auxiliar que converte valor para string *)
 
-let rec vtos (mem: v_env) : string =
-  match mem with
-    V_Env(v, renv) -> 
+let rec vtos (v_mem: v_mem) : string =
+  match v_mem with
+    V_Mem(v, mem) -> 
       (match v with
          VNum n -> string_of_int n
        | VTrue -> "true"
        | VFalse -> "false"
        | VPair(v1, v2) ->
-           "(" ^ (vtos (V_Env(v1, renv))) ^ "," ^ (vtos (V_Env(v2, renv))) ^ ")"
+           "(" ^ (vtos (V_Mem(v1, mem))) ^ "," ^ (vtos (V_Mem(v2, mem))) ^ ")"
        | VClos _ ->  "fn"
        | VRclos _ -> "fn")
 
+      
+let rec mtos (v_mem: v_mem) : string =
+  match v_mem with
+    V_Mem(_, mem) -> 
+      match mem with
+        [] -> ""
+      | (y,i) :: tl -> (vtos (V_Mem(i, mem))) ^ mtos (V_Mem(i, tl))
+                     
 (* principal do interpretador *)
 
 let int_bse (e:expr) : unit =
   try
     let t = typeinfer [] e in
     let v = eval [] e
-    in  print_string ((vtos v) ^ " : " ^ (ttos t))
+    in  print_string ((vtos v) ^ " : " ^ (ttos t));
+    print_string (mtos v)
   with
     TypeError msg ->  print_string ("erro de tipo - " ^ msg)
    
