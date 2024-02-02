@@ -85,6 +85,14 @@ let rec update_mem a k i =
   match a with
     [] -> raise (ElementNotInList ("Endereço " ^ string_of_int k ^ "não encontrado na memória"))
   | (y,i') :: tl -> (if (y=k) then ((y,i) :: (update_mem a k i)) else ((y,i') :: tl))
+                    
+let rec lookup_mem a k =
+  match a with
+    [] -> raise (ElementNotInList ("Endereço " ^ string_of_int k ^ "não encontrado na memória"))
+  | (y,i) :: tl -> if (y=k) then i else lookup_mem tl k
+
+let rec alloc_mem a k =
+  (k,VSkip) :: a   
 
 
   (**+++++++++++++++++++++++++++++++++++++++++*)
@@ -289,31 +297,36 @@ let rec eval (renv:renv) (e:expr) (mem:mem): v_mem =
   | LetRec _ -> raise BugParser
 
   | Seq(e1, e2) ->
-      (match eval renv e1 mem with V_Mem(VSkip, mem') ->
-         eval renv e2 mem') 
+      (match eval renv e1 mem with 
+         V_Mem(VSkip, mem') ->
+           eval renv e2 mem'
+       | _ -> raise BugTypeInfer) 
         
   | Whl(e1,e2) ->
       let e3 = If(e1, Seq(e2,Whl(e1,e2)), Skip) in
       eval renv e3 mem
-                
-(*                   
-  | Asg(l,v) when (match lookup renv l with
-        Some e -> true
-      | None   -> false) ->
-      let sigma_ = updateMem sigma l v in Em(Skip, sigma_)
-
-        implementação small step do asg 
-
-                                    | Asg(v,e) when isvalue v ->
-    (match step e sigma with Em(e', sigma') -> Em(Asg(v, e'), sigma'))
-                                                         *)
+  
   | Asg(e1,e2) ->
       (match eval renv e1 mem with 
          V_Mem(Vl(l), mem') ->
-           match eval renv e2 mem' with
-             V_Mem(v, mem'') ->
-               V_Mem(VSkip, update_mem mem' l v))
-
+           (match eval renv e2 mem' with
+              V_Mem(v, mem'') ->
+                V_Mem(VSkip, update_mem mem'' l v))
+       | _ -> raise BugTypeInfer)
+      
+  | Skip -> V_Mem(VSkip, mem)
+              
+  | Dref(e1) ->
+      (match eval renv e1 mem with 
+         V_Mem(Vl(l), mem') ->
+           V_Mem(lookup_mem mem' l, mem')
+       | _ -> raise BugTypeInfer)
+      
+  | New(e1) ->
+      (match eval renv e1 mem with 
+         V_Mem(Vl(l), mem') ->
+           V_Mem(Vl(l),alloc_mem mem' l)
+       | _ -> raise BugTypeInfer)
 
 (* função auxiliar que converte tipo para string *)
 
@@ -323,6 +336,8 @@ let rec ttos (t:tipo) : string =
   | TyBool -> "bool"
   | TyFn(t1,t2)   ->  "("  ^ (ttos t1) ^ " --> " ^ (ttos t2) ^ ")"
   | TyPair(t1,t2) ->  "("  ^ (ttos t1) ^ " * "   ^ (ttos t2) ^ ")"
+  | TyRef(t) -> "ref " ^ (ttos t)
+  | TyUnit -> "unit"
 
 (* função auxiliar que converte valor para string *)
 
@@ -331,11 +346,12 @@ let rec vtos (value: valor) : string =
      VNum n -> string_of_int n
    | VTrue -> "true"
    | VFalse -> "false"
-   | Vl n -> string_of_int n
+   | Vl n -> "l " ^ string_of_int n
    | VPair(v1, v2) ->
        "(" ^ (vtos (v1)) ^ "," ^ (vtos (v2)) ^ ")"
    | VClos _ ->  "fn"
-   | VRclos _ -> "fn")
+   | VRclos _ -> "fn"
+   | VSkip -> "skip")
 
       
 let rec mtos (mem: mem) : string =
