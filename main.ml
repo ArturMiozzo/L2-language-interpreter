@@ -10,6 +10,16 @@
 (*  SINTAXE, AMBIENTE de TIPOS e de VALORES *)
 (*++++++++++++++++++++++++++++++++++++++++++*)
 
+(* exceções que não devem ocorrer  *)
+
+exception BugParser
+  
+exception BugTypeInfer
+  
+exception ElementNotInList of string
+
+exception TypeError of string
+    
 type tipo =
     TyInt
   | TyBool
@@ -71,18 +81,16 @@ let rec lookup a k =
 let rec update a k i =
   (k,i) :: a   
 
-(* exceções que não devem ocorrer  *)
+let rec update_mem a k i =
+  match a with
+    [] -> raise (ElementNotInList ("Endereço " ^ string_of_int k ^ "não encontrado na memória"))
+  | (y,i') :: tl -> (if (y=k) then ((y,i) :: (update_mem a k i)) else ((y,i') :: tl))
 
-exception BugParser
-  
-exception BugTypeInfer
-  
+
   (**+++++++++++++++++++++++++++++++++++++++++*)
 (*         INFERÊNCIA DE TIPOS              *)
 (*++++++++++++++++++++++++++++++++++++++++++*)
 
-
-exception TypeError of string
 
 
 let rec typeinfer (tenv:tenv) (e:expr) : tipo =
@@ -298,14 +306,13 @@ let rec eval (renv:renv) (e:expr) (mem:mem): v_mem =
 
                                     | Asg(v,e) when isvalue v ->
     (match step e sigma with Em(e', sigma') -> Em(Asg(v, e'), sigma'))
+                                                         *)
   | Asg(e1,e2) ->
-      let l = eval renv e1 in
-      let v = eval renv e2 in
-      (match l with
-         Vl -> 
-           update renv 
-             (match step e1 sigma with Em(e1', sigma') -> Em(Asg(e1', e2), sigma'))
-    *)
+      (match eval renv e1 mem with 
+         V_Mem(Vl(l), mem') ->
+           match eval renv e2 mem' with
+             V_Mem(v, mem'') ->
+               V_Mem(VSkip, update_mem mem' l v))
 
 
 (* função auxiliar que converte tipo para string *)
