@@ -309,36 +309,37 @@ let rec ttos (t:tipo) : string =
 
 (* função auxiliar que converte valor para string *)
 
-let rec vtos (v_mem: v_mem) : string =
-  match v_mem with
-    V_Mem(v, mem) -> 
-      (match v with
-         VNum n -> string_of_int n
-       | VTrue -> "true"
-       | VFalse -> "false"
-       | VPair(v1, v2) ->
-           "(" ^ (vtos (V_Mem(v1, mem))) ^ "," ^ (vtos (V_Mem(v2, mem))) ^ ")"
-       | VClos _ ->  "fn"
-       | VRclos _ -> "fn")
+let rec vtos (value: valor) : string =
+  (match value with
+     VNum n -> string_of_int n
+   | VTrue -> "true"
+   | VFalse -> "false"
+   | Vl n -> string_of_int n
+   | VPair(v1, v2) ->
+       "(" ^ (vtos (v1)) ^ "," ^ (vtos (v2)) ^ ")"
+   | VClos _ ->  "fn"
+   | VRclos _ -> "fn")
 
       
-let rec mtos (v_mem: v_mem) : string =
-  match v_mem with
-    V_Mem(_, mem) -> 
-      match mem with
-        [] -> ""
-      | (y,i) :: tl -> (vtos (V_Mem(i, mem))) ^ mtos (V_Mem(i, tl))
+let rec mtos (mem: mem) : string =
+  match mem with
+    [] -> ""
+  | (y,i) :: tl -> (vtos i) ^ (mtos tl)
                      
 (* principal do interpretador *)
 
 let int_bse (e:expr) : unit =
   try
     let t = typeinfer [] e in
-    let v = eval [] e
-    in  print_string ((vtos v) ^ " : " ^ (ttos t));
-    print_string (mtos v)
+    let v_mem = eval [] e [] in
+    match v_mem with
+    | V_Mem(v, mem) ->
+        let v_str = vtos v in
+        let mem_str = mtos mem in
+        print_string (v_str ^ " : " ^ ttos t ^ " - " ^ mem_str)
   with
-    TypeError msg ->  print_string ("erro de tipo - " ^ msg)
+  | TypeError msg -> print_string ("erro de tipo - " ^ msg)
+
    
  (* as exceções abaixo nao podem ocorrer   *)
   | BugTypeInfer  ->  print_string "corrigir bug em typeinfer"
