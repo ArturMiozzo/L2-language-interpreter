@@ -50,6 +50,7 @@ type valor =
   | VTrue
   | VFalse
   | Vl of int
+  | VSkip
   | VPair of valor * valor
   | VClos  of ident * expr * renv
   | VRclos of ident * ident * expr * renv 
@@ -278,6 +279,15 @@ let rec eval (renv:renv) (e:expr) (mem:mem): v_mem =
         
         
   | LetRec _ -> raise BugParser
+
+  | Seq(e1, e2) ->
+      (match eval renv e1 mem with V_Mem(VSkip, mem') ->
+         eval renv e2 mem') 
+        
+  | Whl(e1,e2) ->
+      let e3 = If(e1, Seq(e2,Whl(e1,e2)), Skip) in
+      eval renv e3 mem
+                
 (*                   
   | Asg(l,v) when (match lookup renv l with
         Some e -> true
