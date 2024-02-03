@@ -359,7 +359,7 @@ let rec vtos (value: valor) : string =
 let rec mtos (mem: mem) : string =
   match mem with
     [] -> ""
-  | (y,i) :: tl -> (vtos i) ^ (mtos tl)
+  | (y,i) :: tl -> "l" ^ string_of_int y ^ "->" ^ (vtos i) ^ " " ^ (mtos tl)
                      
 (* principal do interpretador *)
 
@@ -371,7 +371,7 @@ let int_bse (e:expr) : unit =
     | V_Mem(v, mem) ->
         let v_str = vtos v in
         let mem_str = mtos mem in
-        print_string (v_str ^ " : " ^ ttos t ^ " - " ^ mem_str)
+        print_string (v_str ^ " : " ^ ttos t ^ " - mem: " ^ mem_str)
   with
   | TypeError msg -> print_string ("erro de tipo - " ^ msg)
 
