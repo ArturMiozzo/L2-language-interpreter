@@ -91,8 +91,15 @@ let rec lookup_mem a k =
     [] -> raise (ElementNotInList ("Endereço " ^ string_of_int k ^ "não encontrado na memória"))
   | (y,i) :: tl -> if (y=k) then i else lookup_mem tl k
 
-let rec alloc_mem a k =
-  (k,VSkip) :: a   
+          
+let rec count_mem a =
+  match a with
+    [] -> 0
+  | (y,i) :: tl -> 1 + count_mem a
+          
+let rec alloc_mem a k : v_mem =
+  V_Mem(Vl(count_mem(a)), (count_mem(a),k) :: a)
+  
 
 
   (**+++++++++++++++++++++++++++++++++++++++++*)
@@ -326,9 +333,8 @@ let rec eval (renv:renv) (e:expr) (mem:mem): v_mem =
       
   | New(e1) ->
       (match eval renv e1 mem with 
-         V_Mem(VNum l, mem') ->
-           V_Mem(Vl l,alloc_mem mem' l)    
-       | _ -> raise BugTypeInfer)
+         V_Mem(l, mem') ->
+           (alloc_mem mem' l))
 
 (* função auxiliar que converte tipo para string *)
 
