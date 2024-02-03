@@ -440,3 +440,23 @@ let e2 = Let("x", TyInt, Num 5, Var "foo")
 let e1  = Let("foo", TyFn(TyInt,TyInt), Fn("y", TyInt, Binop(Sum, Var "x", Var "y")), e2)
 
 let tst2 = Let("x", TyInt, Num(2), e1)
+    
+let whilefat = Whl(Binop(Gt, Dref (Var "z"), Num 0), 
+                   Seq( Asg(Var "y", Binop(Mult, Dref (Var "y"), Dref (Var "z"))), 
+                        Asg(Var "z", Binop(Sub,  Dref (Var "z"), Num 1)))                       
+                  ) 
+                               
+                             
+let bodyfat = Let("z", 
+                  TyRef TyInt, 
+                  New (Var "x"),
+                  Let("y", 
+                      TyRef TyInt, 
+                      New (Num 1), 
+                      Seq (whilefat, Dref (Var "y"))))
+    
+let impfat = Let("fat", 
+                 TyFn(TyInt,TyInt), 
+                 Fn("x", TyInt, bodyfat), 
+                 App(Var "fat", Num 5))
+       
