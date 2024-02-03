@@ -84,7 +84,7 @@ let rec update a k i =
 let rec update_mem a k i =
   match a with
     [] -> raise (ElementNotInList ("Endereço " ^ string_of_int k ^ "não encontrado na memória"))
-  | (y,i') :: tl -> (if (y=k) then ((y,i') :: tl) else ((y,i) :: (update_mem a k i)))
+  | (y,i') :: tl -> (if (y=k) then ((y,i) :: tl) else ((y,i') :: (update_mem tl k i)))
                     
 let rec lookup_mem a k =
   match a with
@@ -320,7 +320,7 @@ let rec eval (renv:renv) (e:expr) (mem:mem): v_mem =
               
   | Dref(e1) ->
       (match eval renv e1 mem with 
-         V_Mem(VNum l, mem') ->
+         V_Mem(Vl l, mem') ->
            V_Mem(lookup_mem mem' l, mem')
        | _ -> raise BugTypeInfer)
       
@@ -426,10 +426,8 @@ let counter1 = Let("counter", TyRef TyInt, New (Num 0),
                               Dref (Var "counter"))),
                        Binop(Sum, App (Var "next_val", Skip), 
                              App (Var "next_val", Skip))))
-let memoria = New (Num 3)
-let tesste = Skip 
-let tst_Dref = Dref Skip
-let tst_Asg = Asg(memoria, Num 3)
+
+let tst_Dref = Dref(New (Num 3))
 
 let e2 = Let("x", TyInt, Num 5, Var "foo")
 
