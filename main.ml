@@ -84,7 +84,7 @@ let rec update a k i =
 let rec update_mem a k i =
   match a with
     [] -> raise (ElementNotInList ("Endereço " ^ string_of_int k ^ "não encontrado na memória"))
-  | (y,i') :: tl -> (if (y=k) then ((y,i) :: (update_mem a k i)) else ((y,i') :: tl))
+  | (y,i') :: tl -> (if (y=k) then ((y,i') :: tl) else ((y,i) :: (update_mem a k i)))
                     
 let rec lookup_mem a k =
   match a with
