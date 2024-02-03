@@ -190,8 +190,10 @@ let rec typeinfer (tenv:tenv) (e:expr) : tipo =
        | _ -> raise (TypeError "tipo da variavel precisa ser ref para ser acessada"))
       
   | New(e1) ->
-      let t1 = typeinfer tenv e1
-      in TyRef(t1) 
+      (match typeinfer tenv e1 with
+         t -> TyRef (t)
+      )
+
   
   | Skip -> TyUnit
     
@@ -308,7 +310,7 @@ let rec eval (renv:renv) (e:expr) (mem:mem): v_mem =
   
   | Asg(e1,e2) ->
       (match eval renv e1 mem with 
-         V_Mem(Vl(l), mem') ->
+         V_Mem(Vl l, mem') ->
            (match eval renv e2 mem' with
               V_Mem(v, mem'') ->
                 V_Mem(VSkip, update_mem mem'' l v))
@@ -318,14 +320,14 @@ let rec eval (renv:renv) (e:expr) (mem:mem): v_mem =
               
   | Dref(e1) ->
       (match eval renv e1 mem with 
-         V_Mem(Vl(l), mem') ->
+         V_Mem(VNum l, mem') ->
            V_Mem(lookup_mem mem' l, mem')
        | _ -> raise BugTypeInfer)
       
   | New(e1) ->
       (match eval renv e1 mem with 
-         V_Mem(Vl(l), mem') ->
-           V_Mem(Vl(l),alloc_mem mem' l)
+         V_Mem(VNum l, mem') ->
+           V_Mem(Vl l,alloc_mem mem' l)    
        | _ -> raise BugTypeInfer)
 
 (* função auxiliar que converte tipo para string *)
@@ -406,7 +408,28 @@ let tst = Let("x", TyInt, Num(2), e')
         in let x: int = 5
            in foo 
 *)
-
+let meu_tst = Let("x", TyRef TyInt, New (Num 3), Skip)
+let teste1 = Let("x", TyRef TyInt, New (Num 3),
+                 Let("y", TyInt, Dref (Var "x"), 
+                     Seq(Asg(Var "x", Binop(Sum, Dref(Var "x"), Num 1)), 
+                         Binop(Sum, Var "y",  Dref (Var "x")))))
+     
+let teste2 = Let("x", TyRef TyInt, New (Num 0),
+                 Let("y", TyRef TyInt, Var "x", 
+                     Seq(Asg(Var "x", Num 1), 
+                         Dref (Var "y"))))
+    
+let counter1 = Let("counter", TyRef TyInt, New (Num 0),
+                   Let("next_val", TyFn(TyUnit, TyInt),
+                       Fn("w", TyUnit, 
+                          Seq(Asg(Var "counter",Binop(Sum, Dref(Var "counter"), Num 1)),
+                              Dref (Var "counter"))),
+                       Binop(Sum, App (Var "next_val", Skip), 
+                             App (Var "next_val", Skip))))
+let memoria = New (Num 3)
+let tesste = Skip 
+let tst_Dref = Dref Skip
+let tst_Asg = Asg(memoria, Num 3)
 
 let e2 = Let("x", TyInt, Num 5, Var "foo")
 
