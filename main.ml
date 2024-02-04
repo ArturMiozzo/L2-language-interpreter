@@ -101,6 +101,36 @@ let rec alloc_mem a k : v_mem =
   V_Mem(Vl(count_mem(a)), (count_mem(a),k) :: a)
   
 
+(* função auxiliar que converte tipo para string *)
+
+let rec ttos (t:tipo) : string =
+  match t with
+    TyInt  -> "int"
+  | TyBool -> "bool"
+  | TyFn(t1,t2)   ->  "("  ^ (ttos t1) ^ " --> " ^ (ttos t2) ^ ")"
+  | TyPair(t1,t2) ->  "("  ^ (ttos t1) ^ " * "   ^ (ttos t2) ^ ")"
+  | TyRef(t) -> "ref " ^ (ttos t)
+  | TyUnit -> "unit"
+
+(* função auxiliar que converte valor para string *)
+
+let rec vtos (value: valor) : string =
+  (match value with
+     VNum n -> string_of_int n
+   | VTrue -> "true"
+   | VFalse -> "false"
+   | Vl n -> "l " ^ string_of_int n
+   | VPair(v1, v2) ->
+       "(" ^ (vtos (v1)) ^ "," ^ (vtos (v2)) ^ ")"
+   | VClos _ ->  "fn"
+   | VRclos _ -> "fn"
+   | VSkip -> "skip")
+
+      
+let rec mtos (mem: mem) : string =
+  match mem with
+    [] -> ""
+  | (y,i) :: tl -> "l" ^ string_of_int y ^ "->" ^ (vtos i) ^ " " ^ (mtos tl)
 
   (**+++++++++++++++++++++++++++++++++++++++++*)
 (*         INFERÊNCIA DE TIPOS              *)
@@ -227,26 +257,26 @@ let rec typeinfer (tenv:tenv) (e:expr) : tipo =
 
 let compute (oper: op) (v1: valor) (v2: valor) : valor =
   match (oper, v1, v2) with
-    (Sum, VNum(n1), VNum(n2)) -> VNum (n1 + n2)
-  | (Sub, VNum(n1), VNum(n2)) -> VNum (n1 - n2)
-  | (Mult, VNum(n1),VNum(n2)) -> VNum (n1 * n2)
-  | (Eq, VNum(n1), VNum(n2))  -> if (n1 = n2)  then VTrue else VFalse
-  | (Gt, VNum(n1), VNum(n2))  -> if (n1 > n2)  then VTrue else VFalse
-  | (Lt, VNum(n1), VNum(n2))  -> if (n1 < n2)  then VTrue else VFalse
-  | (Geq, VNum(n1), VNum(n2)) -> if (n1 >= n2) then VTrue else VFalse
-  | (Leq, VNum(n1), VNum(n2)) -> if (n1 <= n2) then VTrue else VFalse
+    (Sum, VNum(n1), VNum(n2)) -> print_string("Sum " ^ string_of_int(n1) ^ " " ^ string_of_int(n2) ^ " | "); VNum (n1 + n2)
+  | (Sub, VNum(n1), VNum(n2)) -> print_string("Sub " ^ string_of_int(n1) ^ " " ^ string_of_int(n2) ^ " | "); VNum (n1 - n2)
+  | (Mult, VNum(n1),VNum(n2)) -> print_string("Mult " ^ string_of_int(n1) ^ " " ^ string_of_int(n2) ^ " | "); VNum (n1 * n2)
+  | (Eq, VNum(n1), VNum(n2))  -> print_string("if Eq " ^ string_of_int(n1) ^ " " ^ string_of_int(n2) ^ " | "); if (n1 = n2)  then VTrue else VFalse
+  | (Gt, VNum(n1), VNum(n2))  -> print_string("if Gt " ^ string_of_int(n1) ^ " " ^ string_of_int(n2) ^ " | "); if (n1 > n2)  then VTrue else VFalse
+  | (Lt, VNum(n1), VNum(n2))  -> print_string("if Lt " ^ string_of_int(n1) ^ " " ^ string_of_int(n2) ^ " | "); if (n1 < n2)  then VTrue else VFalse
+  | (Geq, VNum(n1), VNum(n2)) -> print_string("if Geq " ^ string_of_int(n1) ^ " " ^ string_of_int(n2) ^ " | "); if (n1 >= n2) then VTrue else VFalse
+  | (Leq, VNum(n1), VNum(n2)) -> print_string("if Leq " ^ string_of_int(n1) ^ " " ^ string_of_int(n2) ^ " | "); if (n1 <= n2) then VTrue else VFalse
   | _ -> raise BugTypeInfer
 
 
 let rec eval (renv:renv) (e:expr) (mem:mem): v_mem =
   match e with
-    Num n -> V_Mem(VNum n, mem)
-  | True -> V_Mem(VTrue, mem)
-  | False -> V_Mem(VFalse, mem)
+    Num n -> print_string("Num " ^ string_of_int(n) ^ " | "); V_Mem(VNum n, mem)
+  | True -> print_string("True | "); V_Mem(VTrue, mem)
+  | False -> print_string("False | "); V_Mem(VFalse, mem)
 
   | Var x ->
       (match lookup renv x with
-         Some v -> V_Mem(v, mem)
+         Some v -> print_string("Var " ^ x ^ " | "); V_Mem(v, mem)
        | None -> raise BugTypeInfer)
       
   | Binop(oper,e1,e2) ->
@@ -272,100 +302,71 @@ let rec eval (renv:renv) (e:expr) (mem:mem): v_mem =
 
   | If(e1,e2,e3) ->
       (match eval renv e1 mem with
-         V_Mem(VTrue, mem') -> eval renv e2 mem'
-       | V_Mem(VFalse, mem') -> eval renv e3 mem'
+         V_Mem(VTrue, mem') -> print_string("if True | "); eval renv e2 mem'
+       | V_Mem(VFalse, mem') -> print_string("if False | "); eval renv e3 mem'
        | _ -> raise BugTypeInfer )
 
-  | Fn (x,_,e1) ->  V_Mem(VClos(x,e1,renv), mem)
+  | Fn (x,_,e1) ->  print_string("Fn " ^ x ^ " | "); V_Mem(VClos(x,e1,renv), mem)
 
   | App(e1,e2) ->
       (match eval renv e1 mem with V_Mem(v1, mem') ->
          (match v1 with 
-            VClos(x,ebdy,renv') ->
+            VClos(x,ebdy,renv') -> print_string("App VClos | ");
               (match eval renv' e2 mem' with V_Mem(v2, mem'') ->
                  let renv'' = update renv' x v2
                  in eval renv'' ebdy mem'')
 
-          | VRclos(f,x,ebdy,renv') ->
+          | VRclos(f,x,ebdy,renv') -> print_string("App VRclos | ");
               (match eval renv' e2 mem' with V_Mem(v2, mem'') ->
                  let renv''  = update renv' x v2 in
                  let renv''' = update renv'' f v1
                  in eval renv''' ebdy mem'')
           | _ -> raise BugTypeInfer))
 
-  | Let(x,_,e1,e2) ->
+  | Let(x,_,e1,e2) -> print_string("Let " ^ x ^ " | ");
       (match eval renv e1 mem with V_Mem(v1, mem') ->
          let renv' = update renv x v1 in
          eval renv' e2 mem')
 
-  | LetRec(f,TyFn(t1,t2),Fn(x,tx,e1), e2) when t1 = tx ->
+  | LetRec(f,TyFn(t1,t2),Fn(x,tx,e1), e2) when t1 = tx -> print_string("LetRec | ");
       let renv'= update renv f (VRclos(f,x,e1,renv))
       in eval renv' e2 mem
         
         
   | LetRec _ -> raise BugParser
 
-  | Seq(e1, e2) ->
+  | Seq(e1, e2) -> print_string("Seq | ");
       (match eval renv e1 mem with 
          V_Mem(VSkip, mem') ->
            eval renv e2 mem'
        | _ -> raise BugTypeInfer) 
         
-  | Whl(e1,e2) ->
-      let e3 = If(e1, Seq(e2,Whl(e1,e2)), Skip) in
-      eval renv e3 mem
+  | Whl(e1,e2) -> 
+      (print_string("Whl | ");
+       let e3 = If(e1, Seq(e2,Whl(e1,e2)), Skip) in
+       eval renv e3 mem)
   
   | Asg(e1,e2) ->
       (match eval renv e1 mem with 
-         V_Mem(Vl l, mem') ->
+         V_Mem(Vl l, mem') -> print_string("Asg "^ string_of_int(l) ^ " | ");
            (match eval renv e2 mem' with
               V_Mem(v, mem'') ->
                 V_Mem(VSkip, update_mem mem'' l v))
        | _ -> raise BugTypeInfer)
       
-  | Skip -> V_Mem(VSkip, mem)
+  | Skip -> print_string("Skip | "); V_Mem(VSkip, mem)
               
   | Dref(e1) ->
       (match eval renv e1 mem with 
-         V_Mem(Vl l, mem') ->
+         V_Mem(Vl l, mem') -> print_string("Dref "^ string_of_int(l) ^ " | ");
            V_Mem(lookup_mem mem' l, mem')
        | _ -> raise BugTypeInfer)
       
   | New(e1) ->
       (match eval renv e1 mem with 
-         V_Mem(l, mem') ->
+         V_Mem(l, mem') -> print_string("New " ^ vtos(l) ^ " | ");
            (alloc_mem mem' l))
 
-(* função auxiliar que converte tipo para string *)
-
-let rec ttos (t:tipo) : string =
-  match t with
-    TyInt  -> "int"
-  | TyBool -> "bool"
-  | TyFn(t1,t2)   ->  "("  ^ (ttos t1) ^ " --> " ^ (ttos t2) ^ ")"
-  | TyPair(t1,t2) ->  "("  ^ (ttos t1) ^ " * "   ^ (ttos t2) ^ ")"
-  | TyRef(t) -> "ref " ^ (ttos t)
-  | TyUnit -> "unit"
-
-(* função auxiliar que converte valor para string *)
-
-let rec vtos (value: valor) : string =
-  (match value with
-     VNum n -> string_of_int n
-   | VTrue -> "true"
-   | VFalse -> "false"
-   | Vl n -> "l " ^ string_of_int n
-   | VPair(v1, v2) ->
-       "(" ^ (vtos (v1)) ^ "," ^ (vtos (v2)) ^ ")"
-   | VClos _ ->  "fn"
-   | VRclos _ -> "fn"
-   | VSkip -> "skip")
-
-      
-let rec mtos (mem: mem) : string =
-  match mem with
-    [] -> ""
-  | (y,i) :: tl -> "l" ^ string_of_int y ^ "->" ^ (vtos i) ^ " " ^ (mtos tl)
                      
 (* principal do interpretador *)
 
@@ -396,10 +397,10 @@ let int_bse (e:expr) : unit =
 
 
 (*
-     let x:int = 2 
-     in let foo: int --> int = fn y:int => x + y 
-        in let x: int = 5
-           in foo 10 
+let x:int = 2 
+in let foo: int --> int = fn y:int => x + y 
+in let x: int = 5
+in foo 10 
 *)
 
 let e'' = Let("x", TyInt, Num 5, App(Var "foo", Num 10))
@@ -409,12 +410,13 @@ let e'  = Let("foo", TyFn(TyInt,TyInt), Fn("y", TyInt, Binop(Sum, Var "x", Var "
 let tst = Let("x", TyInt, Num(2), e') 
     
     (*
-     let x:int = 2 
-     in let foo: int --> int = fn y:int => x + y 
-        in let x: int = 5
-           in foo 
+let x:int = 2 
+in let foo: int --> int = fn y:int => x + y 
+in let x: int = 5
+in foo 
 *)
 let meu_tst = Let("x", TyRef TyInt, New (Num 3), Skip)
+    
 let teste1 = Let("x", TyRef TyInt, New (Num 3),
                  Let("y", TyInt, Dref (Var "x"), 
                      Seq(Asg(Var "x", Binop(Sum, Dref(Var "x"), Num 1)), 
@@ -440,6 +442,8 @@ let e2 = Let("x", TyInt, Num 5, Var "foo")
 let e1  = Let("foo", TyFn(TyInt,TyInt), Fn("y", TyInt, Binop(Sum, Var "x", Var "y")), e2)
 
 let tst2 = Let("x", TyInt, Num(2), e1)
+  
+let testeWhile = Let ("x", TyRef TyInt, New (Num 1), Whl (Binop (Gt, Num 5, Dref (Var "x")), Asg (Var "x", Binop (Sum, Dref (Var "x"), Num 1))))
     
 let whilefat = Whl(Binop(Gt, Dref (Var "z"), Num 0), 
                    Seq( Asg(Var "y", Binop(Mult, Dref (Var "y"), Dref (Var "z"))), 
@@ -458,5 +462,4 @@ let bodyfat = Let("z",
 let impfat = Let("fat", 
                  TyFn(TyInt,TyInt), 
                  Fn("x", TyInt, bodyfat), 
-                 App(Var "fat", Num 5))
-       
+                 App(Var "fat", Num 1))
