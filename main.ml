@@ -1,7 +1,14 @@
 (*++++++++++++++++++++++++++++++++++++++*)
-(*  Interpretador para L1               *)
+(*    Trabalho de Semântica Formal      *)
+(*        Artur Chika Miozzo            *)
+(*        Eric Cidade Mathias           *)
+(*++++++++++++++++++++++++++++++++++++++*)
+
+(*++++++++++++++++++++++++++++++++++++++*)
+(*        Interpretador para L2         *)
 (*   - inferência de tipos              *)
 (*   - avaliador big step com ambiente  *)
+(*   - L1 com construções imperativas   *)
 (*++++++++++++++++++++++++++++++++++++++*)
 
 (**+++++++++++++++++++++++++++++++++++++++++*)
@@ -125,17 +132,17 @@ let rec vtos (value: valor) : string =
    | VRclos _ -> "fn"
    | VSkip -> "skip")
 
+(* função auxiliar que converte memoria para string *)
       
 let rec mtos (mem: mem) : string =
   match mem with
     [] -> ""
   | (y,i) :: tl -> "l" ^ string_of_int y ^ "->" ^ (vtos i) ^ " " ^ (mtos tl)
 
-  (**+++++++++++++++++++++++++++++++++++++++++*)
+
+(**+++++++++++++++++++++++++++++++++++++++++*)
 (*         INFERÊNCIA DE TIPOS              *)
 (*++++++++++++++++++++++++++++++++++++++++++*)
-
-
 
 let rec typeinfer (tenv:tenv) (e:expr) : tipo =
   match e with
@@ -152,7 +159,7 @@ let rec typeinfer (tenv:tenv) (e:expr) : tipo =
     (* TBool *)
   | True  -> TyBool
   | False -> TyBool
-
+  
     (*TOP+  e outras para demais peradores binários *)
   | Binop(oper,e1,e2) ->
       let t1 = typeinfer tenv e1 in
@@ -165,7 +172,7 @@ let rec typeinfer (tenv:tenv) (e:expr) : tipo =
 
     (* TPair *)
   | Pair(e1,e2) -> TyPair(typeinfer tenv e1, typeinfer tenv e2)
-  (* TFst *)
+    (* TFst *)
   | Fst e1 ->
       (match typeinfer tenv e1 with
          TyPair(t1,_) -> t1
@@ -212,6 +219,7 @@ let rec typeinfer (tenv:tenv) (e:expr) : tipo =
       else raise (TypeError "tipo da funcao diferente do declarado")
   | LetRec _ -> raise BugParser
   
+    (* Asg *)
   | Asg(e1,e2) ->
       (match typeinfer tenv e1 with
          TyRef(t1) -> 
@@ -219,20 +227,22 @@ let rec typeinfer (tenv:tenv) (e:expr) : tipo =
            if t1 = t2 then TyUnit
            else raise (TypeError "tipos precisam ser iguais para atribuição")
        | _ -> raise (TypeError "tipo da variavel precisa ser ref para ser atribuida"))
-  
+
+    (* Dref *)  
   | Dref(e1) ->
       (match typeinfer tenv e1 with
          TyRef(t1) -> t1
        | _ -> raise (TypeError "tipo da variavel precisa ser ref para ser acessada"))
-      
+
+    (* New *)      
   | New(e1) ->
       (match typeinfer tenv e1 with
-         t -> TyRef (t)
-      )
+         t -> TyRef (t))
 
-  
+    (* Skip *)  
   | Skip -> TyUnit
-    
+
+    (* Whl *)    
   | Whl(e1,e2) -> 
       ( match typeinfer tenv e1 with 
           TyBool -> 
@@ -240,7 +250,8 @@ let rec typeinfer (tenv:tenv) (e:expr) : tipo =
                 TyUnit -> TyUnit
               | _ -> raise (TypeError "segundo argumento precisa ser uma expressao do tipo unit"))
         | _ -> raise (TypeError "condição de Whl não é do tipo bool")) 
-      
+
+    (* Seq *)      
   | Seq(e1,e2) ->
       (match typeinfer tenv e1 with
          TyUnit -> typeinfer tenv e2
@@ -261,11 +272,11 @@ let compute (oper: op) (v1: valor) (v2: valor) : valor =
   | (Lt, VNum(n1), VNum(n2))  -> if (n1 < n2)  then VTrue else VFalse
   | (Geq, VNum(n1), VNum(n2)) -> if (n1 >= n2) then VTrue else VFalse
   | (Leq, VNum(n1), VNum(n2)) -> if (n1 <= n2) then VTrue else VFalse
-  | _ -> raise BugTypeInfer
-
+  | _ -> raise BugTypeInfer 
 
 let rec eval (renv:renv) (e:expr) (mem:mem): v_mem =
   match e with
+  
     Num n -> V_Mem(VNum n, mem)
   | True -> V_Mem(VTrue, mem)
   | False -> V_Mem(VFalse, mem)
@@ -294,7 +305,6 @@ let rec eval (renv:renv) (e:expr) (mem:mem): v_mem =
       (match eval renv e mem with
        | V_Mem(VPair(_,v2), mem') -> V_Mem(v2, mem')
        | _ -> raise BugTypeInfer)
-
 
   | If(e1,e2,e3) ->
       (match eval renv e1 mem with
@@ -381,8 +391,6 @@ let int_bse (e:expr) : unit =
   | BugTypeInfer  ->  print_string "corrigir bug em typeinfer"
   | BugParser     ->  print_string "corrigir bug no parser para let rec"
                         
-
-
 
  (* +++++++++++++++++++++++++++++++++++++++*)
  (*                TESTES                  *)
