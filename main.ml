@@ -95,10 +95,11 @@ let rec lookup_mem a k =
 let rec count_mem a =
   match a with
     [] -> 0
-  | (y,i) :: tl -> 1 + count_mem a
+  | (y,i) :: tl -> 1 + count_mem tl
           
 let rec alloc_mem a k : v_mem =
-  V_Mem(Vl(count_mem(a)), (count_mem(a),k) :: a)
+  let i = count_mem(a) in 
+  V_Mem(Vl i, (i,k) :: a)
   
 
 (* função auxiliar que converte tipo para string *)
@@ -433,7 +434,7 @@ let counter1 = Let("counter", TyRef TyInt, New (Num 0),
                           Seq(Asg(Var "counter",Binop(Sum, Dref(Var "counter"), Num 1)),
                               Dref (Var "counter"))),
                        Binop(Sum, App (Var "next_val", Skip), 
-                             App (Var "next_val", Skip))))
+                             App (Var "next_val", Skip)))) 
 
 let tst_Dref = Dref(New (Num 3))
 
@@ -444,13 +445,17 @@ let e1  = Let("foo", TyFn(TyInt,TyInt), Fn("y", TyInt, Binop(Sum, Var "x", Var "
 let tst2 = Let("x", TyInt, Num(2), e1)
   
 let testeWhile = Let ("x", TyRef TyInt, New (Num 1), Whl (Binop (Gt, Num 5, Dref (Var "x")), Asg (Var "x", Binop (Sum, Dref (Var "x"), Num 1))))
-    
+let tst_seq = Seq(Skip, Num 0)
 let whilefat = Whl(Binop(Gt, Dref (Var "z"), Num 0), 
                    Seq( Asg(Var "y", Binop(Mult, Dref (Var "y"), Dref (Var "z"))), 
                         Asg(Var "z", Binop(Sub,  Dref (Var "z"), Num 1)))                       
                   ) 
-                               
-                             
+        
+let tst_let = Let("y", 
+                  TyRef TyInt, 
+                  New (Num 1), 
+                  Seq (Skip, Num 0))                       
+let tesst =  Asg(Var "y", Binop(Mult, Num 5, Num 5))
 let bodyfat = Let("z", 
                   TyRef TyInt, 
                   New (Var "x"),
@@ -462,4 +467,4 @@ let bodyfat = Let("z",
 let impfat = Let("fat", 
                  TyFn(TyInt,TyInt), 
                  Fn("x", TyInt, bodyfat), 
-                 App(Var "fat", Num 1))
+                 App(Var "fat", Num 2))
